@@ -28,6 +28,10 @@ export const zh = {
   'empty.models': '没有可用的模型。',
   'blocked.composer': '当前模型不可用，请先选择模型',
   'empty.efforts': '当前模型未提供推理等级。',
+  'filter.placeholder': '搜索模型',
+  'filter.aria': '按名称或 ID 筛选模型',
+  'filter.clear': '清除筛选',
+  'empty.filter': '没有匹配的模型。',
 } satisfies Record<string, string>
 
 /** The model namespace key union. */
@@ -53,4 +57,8 @@ export const en = {
   'empty.models': 'No models available.',
   'blocked.composer': 'This model is unavailable — select one to continue',
   'empty.efforts': 'This model provides no reasoning effort levels.',
+  'filter.placeholder': 'Search models',
+  'filter.aria': 'Filter models by name or ID',
+  'filter.clear': 'Clear search',
+  'empty.filter': 'No matching models.',
 } satisfies Record<ModelKey, string>

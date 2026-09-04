@@ -4,8 +4,8 @@ import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent, ModelSelection as AgentModelSelection } from '@deepseek-ai/dsh-agent'
 import { PresetMountError, UnknownPresetError } from '@deepseek-ai/dsh-agent-presets'
-import { AttachmentError, admitEncodedImages } from '@deepseek-ai/dsh-attachment'
-import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
+import { AttachmentError, admitEncodedDocuments, admitEncodedImages } from '@deepseek-ai/dsh-attachment'
+import type { DocumentAttachmentRef, ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import {
   ReasoningEffortId, createUserMessage, freezeMessage,
 } from '@deepseek-ai/dsh-llm'
@@ -518,12 +518,27 @@ async function durablePromptContent(
   if (content.every(part => part.type === 'text')) {
     return content.map(part => ({ type: 'text', text: part.text }))
   }
-  const refs = await admitEncodedImages(ctx.attachments, content.filter(part => part.type === 'image'))
-  let next = 0
-  return content.map(part => part.type === 'text'
-    ? { type: 'text', text: part.text }
-    // admitEncodedImages returns one reference per image part in order.
-    : { type: 'image', attachment: refs[next++] as ImageAttachmentRef })
+  const imageParts = content.filter(part => part.type === 'image')
+  const docParts = content.filter(part => part.type === 'document')
+  const imageRefs = imageParts.length > 0
+    ? await admitEncodedImages(ctx.attachments, imageParts)
+    : []
+  const docRefs = docParts.length > 0
+    ? await admitEncodedDocuments(ctx.attachments, docParts)
+    : []
+
+  let nextImage = 0
+  let nextDoc = 0
+  return content.map((part) => {
+    if (part.type === 'text') return { type: 'text', text: part.text }
+    if (part.type === 'image') return { type: 'image', attachment: imageRefs[nextImage++] as ImageAttachmentRef }
+    const docRef = docRefs[nextDoc++] as DocumentAttachmentRef
+    const hostPath = ctx.attachments.documentHostPath?.(docRef)
+    const accessText = hostPath !== undefined
+      ? `\n[Attached Document: "${docRef.name}" (${(docRef.bytes / 1024 / 1024).toFixed(2)} MB, ${docRef.mediaType})\nExecution Path: ${hostPath}\nYou can inspect, query, or process this document using tools like bash/Python/read.]\n`
+      : `\n[Attached Document: "${docRef.name}" (${(docRef.bytes / 1024 / 1024).toFixed(2)} MB, ${docRef.mediaType})]\n`
+    return { type: 'text', text: accessText }
+  })
 }
 
 function imageBlockIn(

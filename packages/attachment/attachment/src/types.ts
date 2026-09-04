@@ -7,6 +7,23 @@ export type { AttachmentId } from './brand.ts'
 /** Raster image formats accepted by the version-one attachment path. */
 export type ImageMediaType = 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif'
 
+/** Document formats accepted by the attachment path. */
+export type DocumentMediaType =
+  | 'application/pdf'
+  | 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  | 'application/msword'
+  | 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  | 'application/vnd.ms-excel'
+  | 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+  | 'application/vnd.ms-powerpoint'
+  | 'text/plain'
+  | 'text/markdown'
+  | 'text/csv'
+  | 'application/json'
+
+/** All supported attachment media types. */
+export type AttachmentMediaType = ImageMediaType | DocumentMediaType
+
 /** Durable, serializable reference to one immutable normalized image. */
 export interface ImageAttachmentRef {
   /** Opaque storage identifier; never a filesystem path or bearer URL. */
@@ -31,6 +48,18 @@ export interface ImageAttachmentRef {
   }
 }
 
+/** Durable, serializable reference to one immutable document. */
+export interface DocumentAttachmentRef {
+  /** Opaque storage identifier; never a filesystem path or bearer URL. */
+  attachmentId: AttachmentId
+  /** Media type verified from the stored bytes. */
+  mediaType: DocumentMediaType
+  /** Exact byte length. */
+  bytes: number
+  /** Display name stripped of local path information. */
+  name: string
+}
+
 /** Deployment-resolved limits used by upload admission and request buffering. */
 export interface ImageAttachmentLimits {
   maxImageBytes: number
@@ -40,6 +69,14 @@ export interface ImageAttachmentLimits {
   /** Maximum intrinsic width and maximum intrinsic height in pixels for one image. */
   maxImageDimension: number
   mediaTypes: readonly ImageMediaType[]
+}
+
+/** Deployment-resolved limits for document uploads. */
+export interface DocumentAttachmentLimits {
+  maxDocumentBytes: number
+  maxDocumentsPerMessage: number
+  maxMessageDocumentBytes: number
+  mediaTypes: readonly DocumentMediaType[]
 }
 
 /** Base64-encoded image upload accompanying one wire request. */
@@ -52,6 +89,16 @@ export interface EncodedImageAttachment {
   name?: string
 }
 
+/** Base64-encoded document upload accompanying one wire request. */
+export interface EncodedDocumentAttachment {
+  /** Declared media type, verified against the decoded bytes during admission. */
+  mediaType: DocumentMediaType
+  /** Canonical base64 encoding of the document bytes. */
+  data: string
+  /** Display name; it is never interpreted as a path. */
+  name: string
+}
+
 /** Request to validate and durably commit one image. */
 export interface SaveImageAttachment {
   data: Uint8Array
@@ -61,9 +108,24 @@ export interface SaveImageAttachment {
   name?: string
 }
 
+/** Request to validate and durably commit one document. */
+export interface SaveDocumentAttachment {
+  data: Uint8Array
+  /** Caller-declared media type, checked against decoded bytes. */
+  mediaType: DocumentMediaType
+  /** Display name; it is never interpreted as a path. */
+  name: string
+}
+
 /** Stored image bytes returned after reference and digest verification. */
 export interface StoredImageAttachment {
   ref: ImageAttachmentRef
+  data: Uint8Array
+}
+
+/** Stored document bytes returned after reference and digest verification. */
+export interface StoredDocumentAttachment {
+  ref: DocumentAttachmentRef
   data: Uint8Array
 }
 

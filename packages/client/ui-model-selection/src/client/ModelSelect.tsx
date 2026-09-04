@@ -19,7 +19,7 @@ import clsx from 'clsx'
 import type { ModelReasoningEffort, ModelSelection } from '@deepseek-ai/dsh-api-remotes/client'
 import {
   IconCheckOutline16, IconChevronDownOutline14, IconChevronRightOutline14,
-  IconWarningOutline16, Toast,
+  IconCloseOutline16, IconSearchOutline16, IconWarningOutline16, Toast,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ModelSelectInjected } from './slots.ts'
@@ -51,6 +51,9 @@ export function ModelSelect(
   )
   const [open, setOpen] = useState(false)
   const [pane, setPane] = useState<Pane>('root')
+  // Free-text filter for the model list; live only inside the model pane and
+  // reset whenever the pane closes or backs out so a reopened list starts clean.
+  const [query, setQuery] = useState('')
   // The in-menu error strip serves catalog loads (its Retry re-runs the
   // load); a rejected SELECTION announces through the transient toast
   // instead, so the strip renders only while the latest failure-capable
@@ -100,6 +103,24 @@ export function ModelSelect(
     ], [reasoning, t])
   const busy = state.status === 'selecting'
 
+  // The model pane filters by a free-text query; group names, model display
+  // names, and model ids all participate, so a provider-local id still
+  // matches even when the catalog omits a friendly name. Empty groups drop out.
+  const trimmedQuery = query.trim().toLowerCase()
+  const filteredGroups = useMemo(() => trimmedQuery === ''
+    ? state.groups
+    : state.groups
+      .map(group => ({
+        ...group,
+        models: group.models.filter(model =>
+          model.name.toLowerCase().includes(trimmedQuery)
+          || model.id.toLowerCase().includes(trimmedQuery)
+          || group.name.toLowerCase().includes(trimmedQuery)),
+      }))
+      .filter(group => group.models.length > 0),
+  [state.groups, trimmedQuery])
+  const filteredModelCount = filteredGroups.reduce((count, group) => count + group.models.length, 0)
+
   const reload = (): void => {
     lastActionRef.current = 'load'
     load()
@@ -118,6 +139,7 @@ export function ModelSelect(
 
   const show = (): void => {
     setPane('root')
+    setQuery('')
     setOpen(true)
     reload()
   }
@@ -125,6 +147,7 @@ export function ModelSelect(
   const close = (restoreFocus = false): void => {
     setOpen(false)
     setPane('root')
+    setQuery('')
     if (restoreFocus) queueMicrotask(() => { triggerRef.current?.focus() })
   }
 
@@ -140,8 +163,10 @@ export function ModelSelect(
     if (event.key === 'Escape' && open) {
       event.preventDefault()
       // Escape backs out of a drilled pane first, then closes.
-      if (pane !== 'root') setPane('root')
-      else close(true)
+      if (pane !== 'root') {
+        setPane('root')
+        setQuery('')
+      } else close(true)
       return
     }
     if (!open) return
@@ -247,7 +272,7 @@ export function ModelSelect(
         >
           {pane === 'root' && (
             <>
-              <button ref={itemRef()} type="button" role="menuitem" className={css.cell} onClick={() => { setPane('model') }}>
+              <button ref={itemRef()} type="button" role="menuitem" className={css.cell} onClick={() => { setPane('model'); setQuery('') }}>
                 <span className={css.cellLabel}>{t('menu.model')}</span>
                 <span className={css.cellValue}>{modelLabel}</span>
                 <IconChevronRightOutline14 className={css.cellChevron} />
@@ -264,6 +289,28 @@ export function ModelSelect(
 
           {pane === 'model' && (
             <>
+              <div className={css.filter}>
+                <IconSearchOutline16 className={css.filterIcon} aria-hidden />
+                <input
+                  type="text"
+                  className={css.filterInput}
+                  value={query}
+                  autoFocus
+                  placeholder={t('filter.placeholder')}
+                  aria-label={t('filter.aria')}
+                  onChange={(event) => { setQuery(event.target.value) }}
+                />
+                {query !== '' && (
+                  <button
+                    type="button"
+                    className={css.filterClear}
+                    aria-label={t('filter.clear')}
+                    onClick={() => { setQuery('') }}
+                  >
+                    <IconCloseOutline16 />
+                  </button>
+                )}
+              </div>
               {state.status === 'loading' && (
                 <div className={css.status}>{t('status.loading')}</div>
               )}
@@ -280,7 +327,7 @@ export function ModelSelect(
                 </div>
               ))}
               <div className={clsx(css.groups, 'scrollable')}>
-                {state.groups.map((group) => {
+                {filteredGroups.map((group) => {
                   const headingId = `${id}-${group.id}`
                   return (
                     <section role="group" aria-labelledby={headingId} className={css.group} key={group.id}>
@@ -314,6 +361,9 @@ export function ModelSelect(
               </div>
               {state.status === 'ready' && choices.length === 0 && (
                 <div className={css.empty}>{t('empty.models')}</div>
+              )}
+              {state.status === 'ready' && choices.length > 0 && trimmedQuery !== '' && filteredModelCount === 0 && (
+                <div className={css.empty}>{t('empty.filter')}</div>
               )}
             </>
           )}

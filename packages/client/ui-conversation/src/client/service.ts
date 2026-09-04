@@ -17,7 +17,7 @@ import type {
   ISessions, PendingSubmissionRetirement, SessionFace,
 } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import type { ImageMediaType } from '@deepseek-ai/dsh-attachment'
+import type { DocumentMediaType, ImageMediaType } from '@deepseek-ai/dsh-attachment'
 import type { ComposerAttachment } from './contract/slots.ts'
 import type { QueueAction, QueueItemId } from './contract/queue.ts'
 import type { ComposerBlocks } from './contract/composer-blocks.ts'
@@ -64,10 +64,74 @@ export interface IConversation {
   loadOlder(): Promise<void>
 }
 
+const SUPPORTED_IMAGE_TYPES = new Set<string>([
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/gif',
+])
+
+const EXTENSION_MAP: Record<string, string> = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp',
+  '.gif': 'image/gif',
+  '.pdf': 'application/pdf',
+  '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  '.doc': 'application/msword',
+  '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  '.xls': 'application/vnd.ms-excel',
+  '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  '.ppt': 'application/vnd.ms-powerpoint',
+  '.txt': 'text/plain',
+  '.md': 'text/markdown',
+  '.csv': 'text/csv',
+  '.json': 'application/json',
+}
+
+export function resolveFileKindAndType(file: File): { kind: 'image' | 'document'; mediaType: string } {
+  let mediaType = file.type
+  if (!mediaType || mediaType === 'application/octet-stream') {
+    const dotIndex = file.name.lastIndexOf('.')
+    if (dotIndex !== -1) {
+      const ext = file.name.slice(dotIndex).toLowerCase()
+      if (ext in EXTENSION_MAP) {
+        mediaType = EXTENSION_MAP[ext] as string
+      }
+    }
+  }
+  if (SUPPORTED_IMAGE_TYPES.has(mediaType)) {
+    return { kind: 'image', mediaType }
+  }
+  const isDoc = mediaType === 'application/pdf'
+    || mediaType.startsWith('application/vnd.openxmlformats-officedocument.')
+    || mediaType === 'application/msword'
+    || mediaType === 'application/vnd.ms-excel'
+    || mediaType === 'application/vnd.ms-powerpoint'
+    || mediaType === 'text/plain'
+    || mediaType === 'text/markdown'
+    || mediaType === 'text/csv'
+    || mediaType === 'application/json'
+    || file.name.endsWith('.pdf')
+    || file.name.endsWith('.docx')
+    || file.name.endsWith('.xlsx')
+    || file.name.endsWith('.csv')
+    || file.name.endsWith('.txt')
+    || file.name.endsWith('.md')
+    || file.name.endsWith('.json')
+
+  if (isDoc) {
+    return { kind: 'document', mediaType: mediaType || 'application/octet-stream' }
+  }
+  throw new UnsupportedImageMediaTypeError(file.type || file.name)
+}
+
 /** Create one browser-only draft descriptor; only its id enters input state. */
 function browserDraftAttachment(file: File): ComposerAttachment {
+  const { kind } = resolveFileKindAndType(file)
   return {
-    kind: 'image',
+    kind,
     id: randomUUID() as DraftAttachmentId,
     previewUrl: URL.createObjectURL(file),
     file,
@@ -208,7 +272,7 @@ export class ConversationController extends Service implements IConversation {
       throw new Error('conversation.sendSession: one or more draft images are no longer available')
     }
     if (session.getSnapshot().subagent !== null) {
-      const uploaded = await this.serializeImages(attachments.map(attachment => attachment.file))
+      const uploaded = await this.serializeAttachments(attachments)
       const content = [...uploaded, ...(text === '' ? [] : [{ type: 'text' as const, text }])]
       const result = await session.prompt(content, mode, signal)
       return result.ok ? { kind: 'success' } : { kind: 'error' }
@@ -233,7 +297,7 @@ export class ConversationController extends Service implements IConversation {
     let content: Parameters<SessionFace['prompt']>[0]
     try {
       await nextPaint()
-      const uploaded = await this.serializeImages(attachments.map(attachment => attachment.file))
+      const uploaded = await this.serializeAttachments(attachments)
       content = [...uploaded, ...(text === '' ? [] : [{ type: 'text' as const, text }])]
     } catch (error) {
       submission.abandon()
@@ -251,11 +315,13 @@ export class ConversationController extends Service implements IConversation {
    * @returns ordered draft descriptors.
    */
   createDraftImages(files: readonly File[]): readonly ComposerAttachment[] {
-    for (const file of files) imageMediaType(file.type)
+    for (const file of files) resolveFileKindAndType(file)
     return files.map((file) => {
       const attachment = browserDraftAttachment(file)
       this.draftAttachments.set(attachment.id, attachment)
-      probeDimensions(attachment)
+      if (attachment.kind === 'image') {
+        probeDimensions(attachment)
+      }
       return attachment
     })
   }
@@ -384,8 +450,25 @@ export class ConversationController extends Service implements IConversation {
   }
 
   /** Convert browser files to canonical base64 prompt parts. */
-  private serializeImages(images: readonly File[]): Promise<Parameters<SessionFace['prompt']>[0]> {
-    return Promise.all(images.map(async file => ({ type: 'image' as const, ...await this.encodeImage(file) })))
+  private serializeAttachments(attachments: readonly ComposerAttachment[]): Promise<Parameters<SessionFace['prompt']>[0]> {
+    return Promise.all(attachments.map(async (attachment) => {
+      const { kind, mediaType } = resolveFileKindAndType(attachment.file)
+      const data = await base64Of(attachment.file)
+      if (kind === 'image') {
+        return {
+          type: 'image' as const,
+          mediaType: mediaType as ImageMediaType,
+          data,
+          ...(attachment.file.name === '' ? {} : { name: attachment.file.name }),
+        }
+      }
+      return {
+        type: 'document' as const,
+        mediaType: mediaType as DocumentMediaType,
+        data,
+        name: attachment.file.name,
+      }
+    }))
   }
 
   /** Canonical base64 wire form of one browser image file. */

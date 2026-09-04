@@ -140,6 +140,54 @@
   overflow-y: auto;
 }
 
+/* Model-list filter (figma search field): a single inline row above the
+   groups, echoing the Menu card surface so it reads as one control. */
+.filter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 4px 6px;
+  padding: 0 8px;
+  height: 34px;
+  border-radius: 8px;
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.filterIcon {
+  flex: 0 0 auto;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.filterInput {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.filterInput::placeholder {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.filterClear {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: pointer;
+}
+
+.filterClear:hover {
+  color: var(--dsw-alias-label-primary);
+}
+
 .group + .group {
   margin-top: 4px;
 }

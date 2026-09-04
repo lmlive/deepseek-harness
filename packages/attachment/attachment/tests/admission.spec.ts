@@ -1,7 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AttachmentStore } from '@deepseek-ai/dsh-attachment'
-import { admitEncodedImages } from '@deepseek-ai/dsh-attachment'
-import type { ImageAttachmentRef, SaveImageAttachment } from '@deepseek-ai/dsh-attachment/types'
+import { admitEncodedDocuments, admitEncodedImages } from '@deepseek-ai/dsh-attachment'
+import type {
+  DocumentAttachmentRef,
+  ImageAttachmentRef,
+  SaveDocumentAttachment,
+  SaveImageAttachment,
+} from '@deepseek-ai/dsh-attachment/types'
 
 const PNG = 'AAAA' // canonical base64, 3 bytes
 
@@ -15,6 +20,12 @@ function storeOf() {
       width: 1,
       height: 1,
       ...input.name === undefined ? {} : { name: input.name },
+    })))),
+    saveDocuments: vi.fn((inputs: readonly SaveDocumentAttachment[]) => Promise.resolve(inputs.map((input, index): DocumentAttachmentRef => ({
+      attachmentId: `doc-${index + 1}` as DocumentAttachmentRef['attachmentId'],
+      mediaType: input.mediaType,
+      bytes: input.data.byteLength,
+      name: input.name,
     })))),
   }
   return { store: store as unknown as AttachmentStore, mocks: store }
@@ -62,5 +73,29 @@ describe('admitEncodedImages', () => {
     const refused = Object.assign(new Error('Image batch exceeds the configured image-count limit.'), { code: 'TOO_MANY_IMAGES' })
     mocks.saveImages.mockRejectedValueOnce(refused)
     await expect(admitEncodedImages(store, [{ mediaType: 'image/png', data: PNG }])).rejects.toBe(refused)
+  })
+})
+
+describe('admitEncodedDocuments', () => {
+  it('decodes every member and delegates one ordered batch to saveDocuments', async () => {
+    const { store, mocks } = storeOf()
+    const refs = await admitEncodedDocuments(store, [
+      { mediaType: 'application/pdf', data: PNG, name: 'doc.pdf' },
+      { mediaType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', data: PNG, name: 'sheet.xlsx' },
+    ])
+    expect(mocks.saveDocuments).toHaveBeenCalledTimes(1)
+    const batch = mocks.saveDocuments.mock.calls[0]?.[0] as readonly SaveDocumentAttachment[]
+    expect(batch.map(input => [input.name, input.mediaType, input.data.byteLength]))
+      .toEqual([['doc.pdf', 'application/pdf', 3], ['sheet.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 3]])
+    expect(refs.map(ref => ref.attachmentId)).toEqual(['doc-1', 'doc-2'])
+  })
+
+  it('rejects non-canonical and empty base64 payloads before any store call', async () => {
+    const { store, mocks } = storeOf()
+    for (const data of ['', 'AAA', '!!!!']) {
+      await expect(admitEncodedDocuments(store, [{ mediaType: 'application/pdf', data, name: 'a.pdf' }]))
+        .rejects.toMatchObject({ name: 'AttachmentError', code: 'INVALID_DOCUMENT_BASE64' })
+    }
+    expect(mocks.saveDocuments).not.toHaveBeenCalled()
   })
 })

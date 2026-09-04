@@ -1,0 +1,4 @@
+#   The English source of the package README is README.md; the Chinese mirror is README.zh.md.
+#   To regenerate the README pairing, run:
+#     pnpm run verify-translation-pairing --write packages/web/web-search-searxng/README.md
+#   Override the auto-detected README.zh.md name here if the pairing rule differs.

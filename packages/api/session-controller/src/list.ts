@@ -15,8 +15,8 @@ import {
   SESSION_SEARCH_SNIPPET_MAX_CODE_POINTS,
 } from './types.ts'
 import type {
-  SessionListMetadata, SessionProjectionHints, SessionProjectionValues, SessionSearchItem,
-  SessionSearchValue, SessionSummary,
+  SessionListMetadata, SessionListStatus, SessionListStatusState, SessionProjectionHints,
+  SessionProjectionValues, SessionSearchItem, SessionSearchValue, SessionSummary,
 } from './types.ts'
 
 /** Default maximum artifact size eligible for one cold projection observation. */
@@ -30,6 +30,7 @@ const MESSAGE_TYPES = new Set(['user/message', 'assistant/message'])
 const sessionListMetadataSchema: z.ZodType<SessionListMetadata> = z.object({
   blank: z.boolean(),
   lastPromptAt: z.number().nullable(),
+  latestTurnCompleted: z.boolean().nullable(),
 })
 
 const imageLimitsSchema = z.object({
@@ -55,9 +56,15 @@ export function applySessionListMetadata(
   const lastPromptAt = event.type === 'user/message' && event.data.source.kind === 'user'
     ? event.time
     : state.lastPromptAt
+  const latestTurnCompleted = event.type === 'turn/start'
+    ? false
+    : event.type === 'turn/end'
+      ? event.data.reason.kind === 'completed'
+      : state.latestTurnCompleted
   return blank === state.blank && lastPromptAt === state.lastPromptAt
+    && latestTurnCompleted === state.latestTurnCompleted
     ? state
-    : { blank, lastPromptAt }
+    : { blank, lastPromptAt, latestTurnCompleted }
 }
 
 /**
@@ -91,10 +98,10 @@ export class ApiSessionList {
       projectionCtx.sessionProjections.register<'sessionListMetadata', SessionListMetadata>({
         key: 'sessionListMetadata',
         stateSchema: sessionListMetadataSchema,
-        init: () => ({ blank: true, lastPromptAt: null }),
+        init: () => ({ blank: true, lastPromptAt: null, latestTurnCompleted: null }),
         apply: applySessionListMetadata,
         wire: { viewSchema: sessionListMetadataSchema, view: state => state },
-        stateVersion: 1,
+        stateVersion: 2,
       })
     })
     ctx.inject(['sessionProjections', 'attachments'], (projectionCtx) => {

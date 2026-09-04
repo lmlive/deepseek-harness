@@ -40,14 +40,21 @@ export function attachmentErrorText(
     // replacing or re-exporting the file, so it reads as a format problem.
     case 'INVALID_IMAGE':
     case 'IMAGE_TYPE_MISMATCH':
+    case 'UNSUPPORTED_DOCUMENT_TYPE':
+    case 'INVALID_DOCUMENT':
+    case 'INVALID_DOCUMENT_BASE64':
+    case 'DOCUMENT_TYPE_MISMATCH':
       return t('image.unsupportedType')
     case 'TOO_MANY_IMAGES':
+    case 'TOO_MANY_DOCUMENTS':
       if (limits !== undefined) return t('image.tooMany', { count: limits.maxImagesPerMessage })
       break
     case 'IMAGE_TOO_LARGE':
+    case 'DOCUMENT_TOO_LARGE':
       if (limits !== undefined) return t('image.fileTooLarge', { size: imageSizeText(limits.maxImageBytes) })
       break
     case 'IMAGES_TOO_LARGE':
+    case 'DOCUMENTS_TOO_LARGE':
       if (limits !== undefined) return t('image.totalTooLarge', { size: imageSizeText(limits.maxMessageImageBytes) })
       break
     default: break

@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import clsx from 'clsx'
 import {
-  IconChevronLeftOutline14, IconChevronRightOutline14, IconCloseFill14,
+  IconChevronLeftOutline14, IconChevronRightOutline14, IconCloseFill14, ReferenceIcon,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import css from './AttachmentRail.module.css'
 
@@ -18,6 +18,10 @@ export interface AttachmentRailItem {
   alt: string
   /** Accessible label of the item's remove control. */
   removeLabel: string
+  /** Attachment kind: image or document. */
+  kind?: 'image' | 'document' | undefined
+  /** File display name. */
+  name?: string | undefined
 }
 
 /** Rail-level strings the owner resolves from its own locale namespace. */
@@ -168,11 +172,20 @@ export function AttachmentRail<T extends AttachmentRailItem>({ items, labels, on
           <div key={item.id} className={css.item}>
             <button
               type="button"
-              className={css.thumbnail}
+              className={clsx(css.thumbnail, item.kind === 'document' && css.docThumbnail)}
               title={labels.open}
               onClick={() => { onOpen(item) }}
             >
-              <img src={item.previewUrl} alt={item.alt} />
+              {item.kind === 'document' ? (
+                <>
+                  <div className={css.docIconWrap}>
+                    <ReferenceIcon kind="file" size={20} />
+                  </div>
+                  <div className={css.docName}>{item.name ?? item.alt}</div>
+                </>
+              ) : (
+                <img src={item.previewUrl} alt={item.alt} />
+              )}
             </button>
             <button
               type="button"

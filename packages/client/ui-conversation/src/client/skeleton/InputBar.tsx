@@ -14,10 +14,10 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { CSSProperties, KeyboardEvent, MouseEvent, ReactNode } from 'react'
+import type { ChangeEvent, CSSProperties, KeyboardEvent, MouseEvent, ReactNode } from 'react'
 import clsx from 'clsx'
 import {
-  IconPlusOutline16, IconWarningOutline16, Toast, Tooltip,
+  IconPaperclipOutline16, IconPlusOutline16, IconWarningOutline16, Toast, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 // Type-only: the `plan` projection key merge (the TodoDock posture — the
 // composer reads a host-computed value; the domain owns the key).
@@ -242,6 +242,18 @@ export function InputBar({
     if (rejected !== null) showToast(rejected)
   }, [addImages, attachments, imageLimits, showToast, t])
 
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const onPickFiles = useCallback(() => {
+    fileInputRef.current?.click()
+  }, [])
+  const onFileInputChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files
+    if (files !== null && files.length > 0) {
+      intakeImages(Array.from(files))
+      event.target.value = ''
+    }
+  }, [intakeImages])
+
   const canAcceptDrop = !locked && !machineBusy && addImages !== undefined
 
   // The keymap handlers read live bar state through this ref so the editor
@@ -446,6 +458,27 @@ export function InputBar({
                 onClick={onToggleCommandMenu}
               >
                 <IconPlusOutline16 size={14} />
+              </button>
+            </Tooltip>
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              tabIndex={-1}
+              aria-hidden="true"
+              style={{ display: 'none' }}
+              onChange={onFileInputChange}
+            />
+            <Tooltip label={t('input.attachFiles')} side="top" delayMs={500}>
+              <button
+                type="button"
+                className={css.add}
+                aria-label={t('input.attachFiles')}
+                disabled={locked || addImages === undefined}
+                onMouseDown={keepFocus}
+                onClick={onPickFiles}
+              >
+                <IconPaperclipOutline16 size={14} />
               </button>
             </Tooltip>
             <div className={css.modes}>

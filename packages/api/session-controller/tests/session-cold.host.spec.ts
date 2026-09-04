@@ -112,13 +112,13 @@ describe('sessions.list cold merge', () => {
     ctx.provide('sessionProjectionCache', {
       cachedSnapshot: (meta: SessionHeader) => {
         if (meta.id === sid('small-blank')) {
-          return { asOfSeq: 0, values: { sessionListMetadata: { blank: true, lastPromptAt: null } } }
+          return { asOfSeq: 0, values: { sessionListMetadata: { blank: true, lastPromptAt: null, latestTurnCompleted: null } } }
         }
         if (meta.id === sid('small-conversation')) {
-          return { asOfSeq: 0, values: { sessionListMetadata: { blank: true, lastPromptAt: 900 } } }
+          return { asOfSeq: 0, values: { sessionListMetadata: { blank: true, lastPromptAt: 900, latestTurnCompleted: false } } }
         }
         if (meta.id === sid('cached-nonblank')) {
-          return { asOfSeq: 1, values: { sessionListMetadata: { blank: false, lastPromptAt: 1000 } } }
+          return { asOfSeq: 1, values: { sessionListMetadata: { blank: false, lastPromptAt: 1000, latestTurnCompleted: true } } }
         }
         return undefined
       },

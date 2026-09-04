@@ -1,0 +1,64 @@
+# Custom-provider Agent Teams "company simulation" overlay.
+# Apply AFTER dsh-base on the headless profile, e.g.:
+#   DSH_HOME=$HOME/.dsh dsh --profile headless \
+#     --patch ./company-team.patch.yml "你是CEO，组建团队并协调……"
+
+# 1) Register a custom OpenAI-compatible model provider route (pure config, no code).
+#    Route key `acme-gateway` becomes the `provider` value everywhere in the harness.
+- id: llm-pi-ai
+  config:
+    providers:
+      acme-gateway:
+        displayName: Acme Gateway
+        apiKeyEnv: ACME_GATEWAY_API_KEY      # credential ref; secret never in this file
+        api: openai-completions              # wire protocol (pi-ai supports openai-completions / openai-responses)
+        baseURL: https://gateway.acme.example/v1
+        compat:
+          thinkingFormat: deepseek
+        models:
+          - id: acme-think
+            contextWindow: 262144
+            reasoningEfforts:
+              off:
+              high: high
+
+# 2) Make the custom route the Lead (CEO) default model. Continuable teammates
+#    inherit this model, so the whole team runs on acme-gateway/acme-think by default.
+- id: agent-default-model
+  config:
+    provider: acme-gateway
+    model: acme-think
+
+# 3) Agent Teams layer (mirrors @deepseek-ai/dsh-experimental-agent-team-profile):
+#    disable the overlapping global continuable-child controls, keep one-shot
+#    delegation, and insert the Team domain + Team-scoped tools.
+- id: tool-subagent-control
+  disabled: true
+- id: tool-subagent-list-agents
+  disabled: true
+- id: tool-subagent-report
+  disabled: true
+- id: tool-subagent
+  config:
+    provider: spawn
+    toolName: subagent
+    backgroundMode: one-shot
+- id: tool-subagent-fork
+  config:
+    provider: fork
+    toolName: subagent_fork
+    backgroundMode: one-shot
+- insert:
+    - id: agent-team
+      name: '@deepseek-ai/dsh-experimental-agent-team'
+      config:
+        maxMembers: 8
+        maxTasks: 256
+        maxPendingMessagesPerMember: 64
+        maxMessageBytes: 65536
+        disposalTimeoutMs: 5000
+    - id: tool-agent-team
+      name: '@deepseek-ai/dsh-experimental-tool-agent-team'
+      config:
+        freshProvider: spawn
+        forkProvider: fork

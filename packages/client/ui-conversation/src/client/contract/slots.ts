@@ -22,9 +22,9 @@ import type { ComposerSubmitGesture, InputSubmitMode } from './composer-submissi
 import type { ConversationSnapshot } from './snapshot.ts'
 import type { ViewTab } from './views.ts'
 
-/** Browser-owned image that has not crossed the durable Host boundary. */
+/** Browser-owned image or document that has not crossed the durable Host boundary. */
 export interface ComposerAttachment {
-  kind: 'image'
+  kind: 'image' | 'document'
   id: DraftAttachmentId
   file: File
   previewUrl: string

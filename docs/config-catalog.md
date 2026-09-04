@@ -3347,6 +3347,28 @@ export interface Config {
 
 Source: [`packages/web/web-search-perplexity/src/index.ts:30`](../packages/web/web-search-perplexity/src/index.ts)
 
+<a id="deepseek-aidsh-web-search-searxng"></a>
+
+## `@deepseek-ai/dsh-web-search-searxng`
+
+Requires: `web`
+
+```ts config-catalog
+/** Plugin config (all optional — `apply` fills constant defaults). */
+export interface Config {
+  /** Endpoint base; `/search` is appended and `format=json` is always sent. */
+  baseURL?: string
+  /** Default result count when a request carries no `maxResults`. */
+  numResults?: number
+  /** User-Agent header value; defaults to a browser-like UA. */
+  userAgent?: string
+  /** Optional per-request timeout (ms). */
+  timeoutMs?: number
+}
+```
+
+Source: [`packages/web/web-search-searxng/src/index.ts:34`](../packages/web/web-search-searxng/src/index.ts)
+
 <a id="deepseek-aidsh-webhook-github"></a>
 
 ## `@deepseek-ai/dsh-webhook-github`

@@ -9,9 +9,14 @@ import {
   AttachmentId,
 } from '@deepseek-ai/dsh-attachment'
 import type {
+  DocumentAttachmentLimits,
+  DocumentAttachmentRef,
+  DocumentMediaType,
   ImageAttachmentLimits,
   ImageAttachmentRef,
+  SaveDocumentAttachment,
   SaveImageAttachment,
+  StoredDocumentAttachment,
   StoredImageAttachment,
 } from '@deepseek-ai/dsh-attachment'
 import { normalizeImage } from './normalization.ts'
@@ -36,7 +41,7 @@ function displayName(value: string | undefined): string | undefined {
   return clean === '' ? undefined : clean
 }
 
-function ensureReference(ref: ImageAttachmentRef): string {
+function ensureReference(ref: ImageAttachmentRef | DocumentAttachmentRef): string {
   const match = ID_PATTERN.exec(String(ref.attachmentId))
   if (match?.[1] === undefined) throw new AttachmentError('Attachment reference is invalid.', 'INVALID_ATTACHMENT_REF')
   return match[1]
@@ -305,4 +310,141 @@ export async function readImageFile(
     throw new AttachmentError('Stored attachment metadata does not match its reference.', 'ATTACHMENT_CORRUPT')
   }
   return { ref, data }
+}
+
+/**
+ * Validate document magic bytes and basic structure where applicable.
+ */
+function validateDocumentFormat(data: Uint8Array, mediaType: DocumentMediaType): void {
+  if (data.byteLength === 0) throw new AttachmentError('Document is empty.', 'INVALID_DOCUMENT')
+  if (mediaType === 'application/pdf') {
+    if (data.byteLength < 5 || data[0] !== 0x25 || data[1] !== 0x50 || data[2] !== 0x44 || data[3] !== 0x46 || data[4] !== 0x2D) {
+      throw new AttachmentError('Declared document type does not match its bytes.', 'DOCUMENT_TYPE_MISMATCH')
+    }
+  } else if (
+    mediaType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    || mediaType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    || mediaType === 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+  ) {
+    if (data.byteLength < 4 || data[0] !== 0x50 || data[1] !== 0x4B || data[2] !== 0x03 || data[3] !== 0x04) {
+      throw new AttachmentError('Declared document type does not match its bytes.', 'DOCUMENT_TYPE_MISMATCH')
+    }
+  } else if (mediaType === 'application/json') {
+    try {
+      JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(data))
+    } catch {
+      throw new AttachmentError('Declared document type does not match its bytes.', 'DOCUMENT_TYPE_MISMATCH')
+    }
+  }
+}
+
+/**
+ * Run the admission policy for one document.
+ */
+export async function validateDocumentFile(
+  input: SaveDocumentAttachment,
+  limits: DocumentAttachmentLimits,
+): Promise<void> {
+  if (input.data.byteLength > limits.maxDocumentBytes) {
+    throw new AttachmentError('Document exceeds the configured byte limit.', 'DOCUMENT_TOO_LARGE')
+  }
+  validateDocumentFormat(input.data, input.mediaType)
+}
+
+/**
+ * Commit one verified document below a versioned attachment root.
+ */
+export async function commitDocumentFile(
+  root: string,
+  input: SaveDocumentAttachment,
+  limits: DocumentAttachmentLimits,
+): Promise<DocumentAttachmentRef> {
+  await validateDocumentFile(input, limits)
+  const sha256 = digest(input.data)
+  const name = displayName(input.name) ?? 'document'
+  const ref: DocumentAttachmentRef = {
+    attachmentId: AttachmentId(`sha256:${sha256}`),
+    mediaType: input.mediaType,
+    bytes: input.data.byteLength,
+    name,
+  }
+  const bucket = join(root, 'objects', sha256.slice(0, 2))
+  const staging = join(root, 'tmp')
+  const boundary = await ensureDurableHome(dirname(dirname(resolve(root))))
+  await ensureDurableDirectory(bucket, boundary)
+  await ensureDurableDirectory(staging, boundary)
+  const temporary = join(staging, randomUUID())
+  const target = join(bucket, sha256)
+  let handle
+  try {
+    handle = await open(temporary, constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY, 0o600)
+    await handle.writeFile(input.data)
+    await handle.sync()
+    await handle.close()
+    handle = undefined
+    try {
+      await link(temporary, target)
+    } catch (error) {
+      if (!(error instanceof Error && 'code' in error && error.code === 'EEXIST')) throw error
+      const existing = new Uint8Array(await readFile(target))
+      if (digest(existing) !== sha256) throw new AttachmentError('Stored attachment failed integrity verification.', 'ATTACHMENT_CORRUPT')
+    }
+    await unlink(temporary)
+    await chmod(target, 0o400)
+    await syncDirectory(bucket)
+    await syncDirectory(join(root, 'objects'))
+  } catch (error) {
+    if (handle !== undefined) await handle.close().catch(() => {})
+    await unlink(temporary).catch((cleanupError: unknown) => {
+      if (!(cleanupError instanceof Error && 'code' in cleanupError && cleanupError.code === 'ENOENT')) throw cleanupError
+    })
+    if (error instanceof AttachmentError) throw error
+    throw new AttachmentError('Unable to persist document attachment.', 'ATTACHMENT_WRITE_FAILED', { cause: error })
+  }
+  return ref
+}
+
+/**
+ * Save one document and publish the reference.
+ */
+export async function saveDocumentFile(
+  root: string,
+  input: SaveDocumentAttachment,
+  limits: DocumentAttachmentLimits,
+): Promise<DocumentAttachmentRef> {
+  return commitDocumentFile(root, input, limits)
+}
+
+/**
+ * Read and verify one content-addressed document.
+ */
+export async function readDocumentFile(
+  root: string,
+  ref: DocumentAttachmentRef,
+  signal?: AbortSignal,
+): Promise<StoredDocumentAttachment> {
+  signal?.throwIfAborted()
+  const sha256 = ensureReference(ref)
+  let data: Uint8Array
+  try {
+    data = new Uint8Array(await readFile(join(root, 'objects', sha256.slice(0, 2), sha256), { signal }))
+  } catch (error) {
+    signal?.throwIfAborted()
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') throw new AttachmentError('Attachment object is missing.', 'ATTACHMENT_NOT_FOUND')
+    throw new AttachmentError('Unable to read document attachment.', 'ATTACHMENT_READ_FAILED', { cause: error })
+  }
+  signal?.throwIfAborted()
+  if (digest(data) !== sha256) throw new AttachmentError('Stored attachment failed integrity verification.', 'ATTACHMENT_CORRUPT')
+  if (data.byteLength !== ref.bytes) {
+    throw new AttachmentError('Stored attachment metadata does not match its reference.', 'ATTACHMENT_CORRUPT')
+  }
+  return { ref, data }
+}
+
+/**
+ * Derive the absolute path for one document attachment.
+ */
+export function documentHostPath(root: string, ref: DocumentAttachmentRef): string {
+  const sha256 = ensureReference(ref)
+  return join(root, 'objects', sha256.slice(0, 2), sha256)
 }

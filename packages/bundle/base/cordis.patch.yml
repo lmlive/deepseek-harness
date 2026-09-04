@@ -450,13 +450,25 @@
     - id: web
       name: '@deepseek-ai/dsh-web'
       config:
-        searchProvider: deepseek-official
+        # This deployment selects the keyless SearXNG backend. Override via the
+        # `$DSH_WEB_SEARCH_PROVIDER` env or by editing this value back to
+        # `deepseek-official` to use DeepSeek native search.
+        searchProvider: searxng
         fetchProvider: http
 
     - id: web-search-deepseek
       name: '@deepseek-ai/dsh-web-search-deepseek'
       config:
         apiKeyEnv: DEEPSEEK_API_KEY
+
+    # Optional keyless SearXNG search backend, registered but not selected by
+    # default (the web section above pins deepseek-official). A deployment
+    # selects it by overriding `web.searchProvider: searxng` in its settings;
+    # public instances are unreachable from CN networks unless the harness Node
+    # routes through a proxy (NODE_USE_ENV_PROXY=1) or the instance is reachable
+    # directly. Configure baseURL to a self-hosted instance for reliability.
+    - id: web-search-searxng
+      name: '@deepseek-ai/dsh-web-search-searxng'
 
     - id: web-fetch-http
       name: '@deepseek-ai/dsh-web-fetch-http'

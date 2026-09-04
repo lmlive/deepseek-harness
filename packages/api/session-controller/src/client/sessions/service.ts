@@ -49,6 +49,8 @@ export interface SessionSummary {
   running: boolean
   /** Finished while not selected and not yet opened — the sidebar's green "done" reminder. Absent = false. */
   completed?: boolean
+  /** Latest turn is known to be open or non-completed while this session is idle. */
+  failed?: boolean
   /**
    * Empty-log bit (host summary derivation mirror). New Session reuses a blank
    * one targeting the same workspace. Filtering stays with the consumer: the
@@ -587,6 +589,10 @@ export class ClientSessions implements ISessions {
         displayTitle: displayTitleOf(entry.title, entry.cwd, entry.sessionId),
         running: entry.running,
         ...(entry.completed ? { completed: true } : {}),
+        ...(entry.running === false
+          && entry.projectionValues?.sessionListMetadata?.latestTurnCompleted === false
+          ? { failed: true }
+          : {}),
         blank: entry.blank,
         updatedAt: entry.updatedAt,
         ...(entry.projectionValues === undefined

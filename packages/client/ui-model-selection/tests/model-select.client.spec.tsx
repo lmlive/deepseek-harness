@@ -215,3 +215,86 @@ describe('ModelSelect reasoning effort', () => {
     expect(load).not.toHaveBeenCalled()
   })
 })
+
+describe('ModelSelect model filter', () => {
+  const multipleGroups = [{
+    id: 'deepseek-official',
+    name: 'DeepSeek',
+    models: [
+      { id: 'deepseek-v4-flash', name: 'DeepSeek-V4-Flash', reasoning },
+      { id: 'deepseek-v4-pro', name: 'DeepSeek-V4-Pro' },
+    ],
+  }, {
+    id: 'custom-llm',
+    name: 'Custom',
+    models: [
+      { id: 'gemini-3.7-flash-high', name: 'Gemini 3.7 Flash (High)' },
+      { id: 'gpt-5-mini', name: 'GPT-5 Mini' },
+    ],
+  }]
+
+  function openModelList(): void {
+    fireEvent.click(screen.getByRole('button', { name: /选择模型|当前/ }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /模型/ }))
+  }
+
+  it('filters models by name and hides groups with no match', () => {
+    render(<ModelSelect
+      locked={false}
+      available
+      directory={createSnapshotStore(state({ groups: multipleGroups }))}
+      load={vi.fn()}
+      select={vi.fn().mockResolvedValue(true)}
+      t={t}
+    />)
+
+    openModelList()
+    const filter = screen.getByRole('textbox', { name: '按名称或 ID 筛选模型' })
+    fireEvent.change(filter, { target: { value: 'gemini' } })
+
+    expect(screen.queryByRole('menuitemradio', { name: 'DeepSeek-V4-Flash' })).toBeNull()
+    expect(screen.queryByRole('menuitemradio', { name: 'GPT-5 Mini' })).toBeNull()
+    expect(screen.queryByText('DeepSeek')).toBeNull()
+    expect(screen.getByRole('menuitemradio', { name: 'Gemini 3.7 Flash (High)' })).toBeTruthy()
+    expect(screen.getByText('Custom')).toBeTruthy()
+  })
+
+  it('matches the model id when the catalog omits a display name', () => {
+    render(<ModelSelect
+      locked={false}
+      available
+      directory={createSnapshotStore(state({ groups: multipleGroups }))}
+      load={vi.fn()}
+      select={vi.fn().mockResolvedValue(true)}
+      t={t}
+    />)
+
+    openModelList()
+    fireEvent.change(screen.getByRole('textbox', { name: '按名称或 ID 筛选模型' }), {
+      target: { value: 'gpt-5-mini' },
+    })
+    expect(screen.getByRole('menuitemradio', { name: 'GPT-5 Mini' })).toBeTruthy()
+    expect(screen.queryByRole('menuitemradio', { name: 'Gemini 3.7 Flash (High)' })).toBeNull()
+  })
+
+  it('shows a no-match empty state and a clear button resets the query', () => {
+    render(<ModelSelect
+      locked={false}
+      available
+      directory={createSnapshotStore(state({ groups: multipleGroups }))}
+      load={vi.fn()}
+      select={vi.fn().mockResolvedValue(true)}
+      t={t}
+    />)
+
+    openModelList()
+    const filter = screen.getByRole('textbox', { name: '按名称或 ID 筛选模型' })
+    fireEvent.change(filter, { target: { value: 'zzz' } })
+    expect(screen.getByText('没有匹配的模型。')).toBeTruthy()
+    expect(screen.queryByRole('menuitemradio')).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: '清除筛选' }))
+    expect(screen.getByRole('menuitemradio', { name: 'DeepSeek-V4-Flash' })).toBeTruthy()
+    expect(screen.queryByText('没有匹配的模型。')).toBeNull()
+  })
+})

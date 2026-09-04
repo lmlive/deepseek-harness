@@ -83,6 +83,8 @@ export function ComposerAttachments({
     previewUrl: attachment.previewUrl,
     alt: attachment.file.name || t('image.pending'),
     removeLabel: t('image.remove', { name: attachment.file.name }),
+    kind: attachment.kind,
+    name: attachment.file.name,
     attachment,
   })), [attachments, t])
 
@@ -99,7 +101,13 @@ export function ComposerAttachments({
           <AttachmentRail
             items={railItems}
             labels={attachmentRailLabels(t)}
-            onOpen={(item) => { setPreview(item.attachment) }}
+            onOpen={(item) => {
+              if (item.attachment.kind === 'document') {
+                window.open(item.attachment.previewUrl, '_blank')
+              } else {
+                setPreview(item.attachment)
+              }
+            }}
             onRemove={(item) => { onRemoveImage(item.attachment.id) }}
           />
         </div>

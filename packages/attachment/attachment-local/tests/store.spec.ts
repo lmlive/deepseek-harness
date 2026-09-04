@@ -6,9 +6,18 @@ import { dirname, join, parse, resolve } from 'node:path'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import sharp from 'sharp'
-import type { ImageAttachmentLimits } from '@deepseek-ai/dsh-attachment'
+import type { DocumentAttachmentLimits, ImageAttachmentLimits } from '@deepseek-ai/dsh-attachment'
 import type { NormalizationPolicy } from '../src/normalization.ts'
-import { commitPreparedImageFile, prepareImageFile, readImageFile, saveImageFile } from '../src/store.ts'
+import {
+  commitPreparedImageFile,
+  documentHostPath,
+  prepareImageFile,
+  readDocumentFile,
+  readImageFile,
+  saveDocumentFile,
+  saveImageFile,
+  validateDocumentFile,
+} from '../src/store.ts'
 
 const fsControl = vi.hoisted(() => ({
   readSignals: [] as AbortSignal[],
@@ -280,5 +289,36 @@ describe('local attachment store', () => {
       ...prepared,
       data: Uint8Array.of(...prepared.data, 0),
     })).rejects.toMatchObject({ code: 'ATTACHMENT_CORRUPT' })
+  })
+
+  it('saves, reads, and validates PDF and office documents', async () => {
+    const storageRoot = await root()
+    const docLimits: DocumentAttachmentLimits = {
+      maxDocumentBytes: 1024 * 1024,
+      maxDocumentsPerMessage: 5,
+      maxMessageDocumentBytes: 5 * 1024 * 1024,
+      mediaTypes: ['application/pdf', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/json', 'text/plain'],
+    }
+    const pdfData = new Uint8Array(Buffer.from('%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF'))
+    const ref = await saveDocumentFile(storageRoot, {
+      data: pdfData,
+      mediaType: 'application/pdf',
+      name: 'report.pdf',
+    }, docLimits)
+
+    expect(ref.name).toBe('report.pdf')
+    expect(ref.mediaType).toBe('application/pdf')
+    expect(ref.bytes).toBe(pdfData.byteLength)
+
+    const stored = await readDocumentFile(storageRoot, ref)
+    expect(stored.data).toEqual(pdfData)
+    expect(documentHostPath(storageRoot, ref)).toContain('objects')
+
+    // Invalid format rejection
+    await expect(validateDocumentFile({
+      data: new Uint8Array([1, 2, 3]),
+      mediaType: 'application/pdf',
+      name: 'fake.pdf',
+    }, docLimits)).rejects.toMatchObject({ code: 'DOCUMENT_TYPE_MISMATCH' })
   })
 })

@@ -1,7 +1,13 @@
 /** Browser-safe request, result, and lifecycle vocabulary for the Session Remote service. */
 
 import type {
-  AttachmentIdType, ImageAttachmentLimits, ImageAttachmentRef, ImageMediaType,
+  AttachmentIdType,
+  DocumentAttachmentLimits,
+  DocumentAttachmentRef,
+  DocumentMediaType,
+  ImageAttachmentLimits,
+  ImageAttachmentRef,
+  ImageMediaType,
 } from '@deepseek-ai/dsh-attachment'
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { MessageId } from '@deepseek-ai/dsh-llm/brand'
@@ -47,6 +53,8 @@ export interface SessionListMetadata {
   readonly blank: boolean
   /** Latest human-authored prompt time in the folded prefix. */
   readonly lastPromptAt: number | null
+  /** True for a completed latest turn, false for an open/non-completed turn, null when no turn exists. */
+  readonly latestTurnCompleted: boolean | null
 }
 
 /** Every available cached wire value used as partial, possibly stale Session-list hints. */
@@ -67,7 +75,7 @@ export interface SessionProjectionBaseline {
 export type SessionProjectionValues = Partial<SessionProjectionMap>
   & Readonly<Record<string, SessionProjectionValue>>
 
-/** Browser-submitted prompt content; the Host promotes image bytes to durable references. */
+/** Browser-submitted prompt content; the Host promotes image/document bytes to durable references. */
 export type PromptContentPart =
   | { readonly type: 'text'; readonly text: string }
   | {
@@ -75,6 +83,12 @@ export type PromptContentPart =
     readonly mediaType: ImageMediaType
     readonly data: string
     readonly name?: string
+  }
+  | {
+    readonly type: 'document'
+    readonly mediaType: DocumentMediaType
+    readonly data: string
+    readonly name: string
   }
 
 /** Complete model selection for one Session. */
@@ -334,9 +348,9 @@ export interface SessionAttachmentRequest {
   readonly attachmentId: AttachmentIdType
 }
 
-/** Durable image read response value. */
+/** Durable attachment read response value. */
 export interface SessionAttachmentValue {
-  readonly attachment: ImageAttachmentRef
+  readonly attachment: ImageAttachmentRef | DocumentAttachmentRef
   readonly data: string
 }
 
