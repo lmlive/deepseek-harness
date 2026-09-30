@@ -27,8 +27,12 @@ export function registerChatNodeRenderers(
   performanceUsage: ObservableSnapshot<PerformanceUsageMode>,
   presentation: ObservableSnapshot<ChatPresentationPolicy>,
 ): void {
-  ctx.slots.inject('conversation.chat.node', () => ctx.slots.register(
-    { name: 'conversation.chat.node', key: 'user', locale: NS }, UserMessageNodeView))
+  ctx.slots.inject('conversation.chat.node', () => ctx.slots.register({
+    name: 'conversation.chat.node',
+    key: 'user',
+    locale: NS,
+    children: { 'conversation.chat.user-actions': { kind: 'list', scope: 'session' } },
+  }, UserMessageNodeView))
   ctx.slots.inject('conversation.chat.node', () => ctx.slots.register(
     { name: 'conversation.chat.node', key: 'steering', locale: NS }, UserMessageNodeView))
   ctx.slots.inject('conversation.chat.node', () => ctx.slots.register(

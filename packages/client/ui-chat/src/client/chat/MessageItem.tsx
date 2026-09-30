@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import type { PendingSubmission } from '@deepseek-ai/dsh-api-session-controller/client'
 import type { MessageImageSource } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { fileExtension, FileTypeIcon, fileSizeText, JsonBlock, projectUserText, StateDot, TextShimmer } from '@deepseek-ai/dsh-client-ui-primitives'
+import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ChatNodeOwnerProps, ChatNodeViewProps, ChatViewSlotProps } from '../contract/slots.ts'
 import type { ModelRetryNode, TurnErrorNode, UserMessageNode } from '../contract/snapshot.ts'
 import { CompactionItem } from './CompactionItem.tsx'
@@ -316,10 +317,13 @@ export function PendingSubmissionBubble({ submission, renderMessageImages, t }: 
   )
 }
 
+export type UserMessageNodeViewProps = ChatNodeViewProps<'user' | 'steering'>
+  & Partial<PropsRenderSlots<'conversation.chat.user-actions'>>
+
 /** User and admitted-steering keyed Chat renderer. */
 export const UserMessageNodeView = memo(function UserMessageNodeView({
-  node, renderMessageImages, openFile, openSkill, t,
-}: ChatNodeViewProps<'user' | 'steering'>) {
+  node, renderMessageImages, openFile, openSkill, renderSlot, t,
+}: UserMessageNodeViewProps) {
   const data = node.data
   return (
     <UserStyleBubble
@@ -335,6 +339,13 @@ export const UserMessageNodeView = memo(function UserMessageNodeView({
           time={data.time}
           clock="start"
           className={css.actions}
+          extraActions={renderSlot?.('conversation.chat.user-actions', {
+            seq: data.seq,
+            messageId: (data as { messageId?: string; id?: string }).messageId ?? (data as { messageId?: string; id?: string }).id,
+            time: data.time,
+            text,
+            content: data.content,
+          })}
           t={t}
         />
       )}
