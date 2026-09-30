@@ -1,0 +1,65 @@
+# ==============================================================================
+# DeepSeek Harness (dsh) - 高质量软件开发协作团队配置 (Software Development Team)
+# ==============================================================================
+#
+# 该 patch 配置文件专为软件工程协同研发设计：
+# 1. 规避全局单次 subagent 控制工具与团队工具间的命名冲突；
+# 2. 挂载 Agent Team 核心协调引擎 (持久信箱 Mailbox, CAS 乐观锁任务板 Task Board)；
+# 3. 注入 Agent Team 9 个专用模型工具 (创建/消息/查询/等待/任务更新等)；
+# 4. 挂载 Web 端协同面板 (Roster 成员花名册与 Task Board 实时看板)；
+# 5. 扩充工作区项目指令字节上限，支持加载大型项目规范与多智能体分工准则。
+#
+# 运行方式:
+#   Web 模式:
+#     node --import tsx/esm apps/cli/src/bin.ts --profile web \
+#       --patch /data/deepseek-harness/agent-team/patch.yml \
+#       --no-open --port 8765
+#
+#   CLI Headless 模式:
+#     pnpm dsh --profile headless \
+#       --patch /data/deepseek-harness/agent-team/patch.yml \
+#       "研发任务说明..."
+# ==============================================================================
+
+# ── 1. 禁用冲突的旧版全局工具 ───────────────────────────────────────────────────
+- id: tool-subagent-control
+  disabled: true
+
+- id: tool-subagent-list-agents
+  disabled: true
+
+# ── 2. 注入 Agent Team 核心服务、模型工具与 Web 界面 ─────────────────────────────
+- insert:
+    # 2.1 团队协调引擎核心 (支持最多 12 名成员、512 个并发安全任务、大容量持久信箱)
+    - id: agent-team
+      name: '@deepseek-ai/dsh-experimental-agent-team'
+      config:
+        maxMembers: 12
+        maxTasks: 512
+        maxPendingMessagesPerMember: 128
+        maxMessageBytes: 131072
+        disposalTimeoutMs: 10000
+
+    # 2.2 Agent Team 专用模型工具集
+    # 为 Agent 赋予 9 个团队协同工具:
+    #   - spawn_teammate: 创建全新成员 (fresh) 或继承上下文成员 (fork)
+    #   - send_message: 向目标成员发送持久化 Steer 消息 (自动唤醒/排队)
+    #   - list_agents: 查询团队成员花名册及实时运行状态 (running/idle/inactive)
+    #   - wait_agent: 阻塞等待团队状态下一次推进
+    #   - interrupt_agent: 强制中断目标成员当前轮次 (仅 Lead)
+    #   - team_task_create / team_task_list / team_task_get / team_task_update: 共享任务板
+    - id: tool-agent-team
+      name: '@deepseek-ai/dsh-experimental-tool-agent-team'
+      config:
+        freshProvider: spawn
+        forkProvider: fork
+
+    # 2.3 Web 前端团队协同看板 (在 Web 界面呈现 Roster 成员状态与 Task Board 实时进度)
+    - id: ui-agent-team
+      name: '@deepseek-ai/dsh-experimental-client-ui-agent-team'
+
+# ── 3. 增强工作区指令上下文预算 ─────────────────────────────────────────────────
+# 扩展项目级 AGENTS.md / CLAUDE.md 的加载容量，确保复杂的架构规范与多智能体分工协议完整载入
+- id: agent-instructions
+  config:
+    maxBytes: 131072

@@ -1,0 +1,8 @@
+- insert:
+    - id: mcp-searxng
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        serverName: searxng
+        transport: stdio
+        command: /data/deepseek-harness/searxng-mcp/.venv/bin/python3
+        args: ['/data/deepseek-harness/searxng-mcp/server.py']
